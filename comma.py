@@ -1,6 +1,5 @@
 import re
 import time
-
 import mwparserfromhell
 import pywikibot
 
@@ -17,13 +16,12 @@ ARTICLE_NAMESPACE = 0
 SLEEP_BETWEEN_EDITS = 5
 
 EDIT_SUMMARY = (
-    "بوت: استبدال الفاصلة الإنجليزية (,) بالفاصلة العربية (،) "
+    "بوت: استبدال الفاصلة الإنجليزية (,) بالفاصلة العربية (،)"
 )
 
 
 # ============================== الأحرف العربية ==============================
 
-# نطاقات Unicode الشائعة للأحرف العربية
 ARABIC_CHARS = (
     r"\u0600-\u06FF"
     r"\u0750-\u077F"
@@ -37,12 +35,12 @@ ARABIC_CHARS = (
 # 2. وبعدها مسافات اختيارية ثم حرف عربي أو رقم عربي/لاتيني.
 #
 # أمثلة:
-# "نص, نص"       -> "نص، نص"
-# "السعودية, 123" -> "السعودية، 123"
-# "Hello, world" -> لا يتغير
+# "نص, نص"          -> "نص، نص"
+# "السعودية, 123"   -> "السعودية، 123"
+# "Hello, world"    -> لا يتغير
 # "Microsoft, Inc." -> لا يتغير
-# "Python, Java" -> لا يتغير
-# "1,000" -> لا يتغير
+# "Python, Java"    -> لا يتغير
+# "1,000"           -> لا يتغير
 
 ARABIC_COMMA_PATTERN = re.compile(
     rf"(?<=[{ARABIC_CHARS}]),(?=\s*[{ARABIC_CHARS}0-9٠-٩])"
@@ -53,11 +51,6 @@ def replace_arabic_commas(text):
     """
     يستبدل الفاصلة الإنجليزية بالفاصلة العربية
     فقط عندما يكون السياق عربيًا.
-
-    لا يغير:
-    - النصوص الإنجليزية الخالصة.
-    - أسماء الشركات والبرامج الإنجليزية.
-    - الأرقام مثل 1,000.
     """
     return ARABIC_COMMA_PATTERN.sub("،", text)
 
@@ -107,13 +100,9 @@ IN_USE_TEMPLATES = {
 
 def normalize_template_name(raw_name):
     """
-    توحيد اسم القالب:
-    - إزالة المسافات الزائدة.
-    - تحويل الشرطة السفلية إلى مسافة.
-    - إزالة بادئة قالب: أو Template: إن وجدت.
+    توحيد اسم القالب.
     """
     name = str(raw_name).strip().replace("_", " ")
-
     lname = name.lower()
 
     if name.startswith("قالب:"):
@@ -127,15 +116,16 @@ def normalize_template_name(raw_name):
 
 def find_in_use_signal(wikicode):
     """
-    يبحث في قوالب الصفحة، بما فيها القوالب المتداخلة،
-    عن قالب يدل على أن الصفحة قيد التحرير.
+    يبحث عن قالب يدل على أن الصفحة قيد التحرير.
     """
+
     normalized_set = {
         name.lower()
         for name in IN_USE_TEMPLATES
     }
 
     for template in wikicode.filter_templates():
+
         raw_name = str(template.name).strip()
 
         normalized_name = normalize_template_name(
@@ -174,11 +164,13 @@ def process_wikicode(wikicode):
             node,
             mwparserfromhell.nodes.Text
         ):
+
             new_value = replace_arabic_commas(
                 node.value
             )
 
             if new_value != node.value:
+
                 node.value = new_value
                 changed = True
 
@@ -188,16 +180,16 @@ def process_wikicode(wikicode):
             node,
             mwparserfromhell.nodes.Tag
         ):
+
             tag_name = str(
                 node.tag
             ).strip().lower()
 
-            # حماية كاملة للوسوم التقنية
             if tag_name in PROTECTED_TAGS:
                 continue
 
-            # معالجة محتوى الوسم غير المحمي
             if node.contents is not None:
+
                 if process_wikicode(
                     node.contents
                 ):
@@ -209,6 +201,7 @@ def process_wikicode(wikicode):
             node,
             mwparserfromhell.nodes.Heading
         ):
+
             if process_wikicode(
                 node.title
             ):
@@ -220,7 +213,7 @@ def process_wikicode(wikicode):
             node,
             mwparserfromhell.nodes.Template
         ):
-            # لا نعدل داخل أي قالب
+
             continue
 
         # ========================== الروابط الداخلية =====================
@@ -229,7 +222,7 @@ def process_wikicode(wikicode):
             node,
             mwparserfromhell.nodes.Wikilink
         ):
-            # لا نعدل داخل الروابط الداخلية
+
             continue
 
         # ========================== الروابط الخارجية =====================
@@ -238,7 +231,7 @@ def process_wikicode(wikicode):
             node,
             mwparserfromhell.nodes.ExternalLink
         ):
-            # لا نعدل داخل الروابط الخارجية
+
             continue
 
         # ========================== التعليقات ============================
@@ -247,17 +240,14 @@ def process_wikicode(wikicode):
             node,
             mwparserfromhell.nodes.Comment
         ):
-            # لا نعدل التعليقات المخفية
+
             continue
 
     return changed
 
 
 def build_new_text(wikicode):
-    """
-    يعالج شجرة الويكي كود ويعيد:
-    (النص الجديد، هل حدث تغيير؟)
-    """
+
     changed = process_wikicode(
         wikicode
     )
@@ -271,13 +261,11 @@ def build_new_text(wikicode):
 # ============================== فحص الاستبعاد ===============================
 
 def get_exclusion_reason(page, wikicode):
-    """
-    يتحقق من استبعاد الصفحة من تعديل البوت.
-    """
 
-    # الفحص الرسمي من Pywikibot
     try:
+
         if not page.botMayEdit():
+
             return (
                 "قالب استبعاد بوتات قياسي "
                 "({{bots}}/{{nobots}}) أو "
@@ -285,17 +273,18 @@ def get_exclusion_reason(page, wikicode):
             )
 
     except Exception as e:
+
         return (
             "تعذّر التحقق من صلاحية التعديل "
             f"عبر botMayEdit(): {e}"
         )
 
-    # الفحص اليدوي لقوالب التحرير
     template_name = find_in_use_signal(
         wikicode
     )
 
     if template_name:
+
         return (
             "وُجد قالب حالة تحرير نشطة: "
             "{{"
@@ -309,25 +298,15 @@ def get_exclusion_reason(page, wikicode):
 # ============================== اختيار مقالة عشوائية ========================
 
 def get_random_article(site):
-    """
-    يبحث بشكل مستمر عن مقالة عشوائية تحتوي على فاصلة إنجليزية
-    قابلة للتعديل في سياق عربي، خارج القوالب والاستشهادات
-    والوسوم المحمية.
-
-    النصوص الإنجليزية مثل:
-        Hello, world
-        Microsoft, Inc.
-        Python, Java
-
-    لن تعتبر تعديلات قابلة للتنفيذ.
-    """
 
     attempts = 0
 
     while True:
+
         attempts += 1
 
         try:
+
             request = site.simple_request(
                 action="query",
                 generator="random",
@@ -346,6 +325,7 @@ def get_random_article(site):
             title = None
 
             for page_data in pages.values():
+
                 title = page_data.get(
                     "title"
                 )
@@ -354,13 +334,15 @@ def get_random_article(site):
                     break
 
             if not title:
+
                 print(
                     "لم يتم الحصول على عنوان، إعادة المحاولة..."
                 )
+
                 continue
 
             print(
-                f"المحاولة {attempts}: {title}"
+                f"\nالمحاولة {attempts}: {title}"
             )
 
             page = pywikibot.Page(
@@ -368,44 +350,41 @@ def get_random_article(site):
                 title
             )
 
-            # ----------------------------------------------------------
-            # فحص الصفحة
-            # ----------------------------------------------------------
-
             if not page.exists():
+
                 print(
-                    "    الصفحة غير موجودة، تجاوز."
+                    "   الصفحة غير موجودة، تجاوز."
                 )
+
                 continue
 
             if page.isRedirectPage():
+
                 print(
-                    "    تحويلة، تجاوز."
+                    "   تحويلة، تجاوز."
                 )
+
                 continue
 
             if page.namespace() != ARTICLE_NAMESPACE:
+
                 print(
-                    "    ليست في نطاق المقالات، تجاوز."
+                    "   ليست في نطاق المقالات، تجاوز."
                 )
+
                 continue
 
-            # ----------------------------------------------------------
-            # قراءة الصفحة
-            # ----------------------------------------------------------
-
             try:
+
                 text = page.text
 
             except Exception as e:
-                print(
-                    f"    تعذر القراءة: {e}"
-                )
-                continue
 
-            # ----------------------------------------------------------
-            # فحص الاستبعاد
-            # ----------------------------------------------------------
+                print(
+                    f"   تعذر القراءة: {e}"
+                )
+
+                continue
 
             wikicode = mwparserfromhell.parse(
                 text
@@ -417,28 +396,24 @@ def get_random_article(site):
             )
 
             if exclusion_reason:
-                print(
-                    "   🔐 الصفحة مستبعدة، تجاوز."
-                )
-                continue
 
-            # ----------------------------------------------------------
-            # تجربة إنشاء التعديل
-            # ----------------------------------------------------------
+                print(
+                    "الصفحة مستبعدة، تجاوز."
+                )
+
+                continue
 
             new_text, changed = build_new_text(
                 wikicode
             )
 
             if not changed or new_text == text:
+
                 print(
                     "   ✓ لا يوجد تغيير عربي مناسب، تجاوز."
                 )
-                continue
 
-            # ----------------------------------------------------------
-            # وجدنا مقالة مناسبة
-            # ----------------------------------------------------------
+                continue
 
             print(
                 "\n"
@@ -446,15 +421,15 @@ def get_random_article(site):
             )
 
             print(
-                "🎯 تم العثور على مقالة مناسبة!"
+                " تم العثور على مقالة مناسبة!"
             )
 
             print(
-                f"📄 المقالة: {title}"
+                f"المقالة: {title}"
             )
 
             print(
-                f"🔢 عدد المحاولات: {attempts}"
+                f"عدد المحاولات: {attempts}"
             )
 
             print(
@@ -464,21 +439,26 @@ def get_random_article(site):
             return title
 
         except KeyboardInterrupt:
+
             raise
 
         except Exception as e:
+
             print(
-                f"    خطأ أثناء البحث: {e}"
+                f"خطأ أثناء البحث: {e}"
             )
 
             print(
-                "   🔄 سيتم الانتقال إلى محاولة جديدة..."
+                "سيتم الانتقال إلى محاولة جديدة..."
             )
+
+            time.sleep(2)
 
 
 # ============================== معالجة الصفحة ================================
 
 def process_page(site, title):
+
     print(
         "\n"
         + "=" * 72
@@ -493,65 +473,51 @@ def process_page(site, title):
     )
 
     try:
+
         page = pywikibot.Page(
             site,
             title
         )
 
-        # --------------------------------------------------------------
-        # التحقق من وجود الصفحة
-        # --------------------------------------------------------------
-
         if not page.exists():
+
             print(
                 "الصفحة غير موجودة، تم تجاهلها."
             )
+
             return
 
-        # --------------------------------------------------------------
-        # التحقق من التحويلة
-        # --------------------------------------------------------------
-
         if page.isRedirectPage():
+
             print(
                 "الصفحة تحويلة، تم تجاهلها."
             )
+
             return
 
-        # --------------------------------------------------------------
-        # التحقق من النطاق
-        # --------------------------------------------------------------
-
         if page.namespace() != ARTICLE_NAMESPACE:
+
             print(
                 "الصفحة ليست في نطاق المقالات، تم تجاهلها."
             )
+
             return
 
-        # --------------------------------------------------------------
-        # قراءة الصفحة
-        # --------------------------------------------------------------
-
         try:
+
             old_text = page.text
 
         except Exception as e:
+
             print(
                 f"تعذر قراءة الصفحة: {e}"
             )
-            return
 
-        # --------------------------------------------------------------
-        # تحليل الويكي كود
-        # --------------------------------------------------------------
+            return
 
         wikicode = mwparserfromhell.parse(
             old_text
         )
-
-        # --------------------------------------------------------------
-        # فحص الاستبعاد
-        # --------------------------------------------------------------
 
         exclusion_reason = get_exclusion_reason(
             page,
@@ -559,34 +525,27 @@ def process_page(site, title):
         )
 
         if exclusion_reason:
+
             print(
-                "🔐 الصفحة مستبعدة من تعديل البوت — "
+                "🔐 الصفحة مستبعدة من تعديل البوت: "
                 f"{exclusion_reason}"
             )
-            return
 
-        # --------------------------------------------------------------
-        # إنشاء النص الجديد
-        # --------------------------------------------------------------
+            return
 
         new_text, changed = build_new_text(
             wikicode
         )
 
-        # --------------------------------------------------------------
-        # لا يوجد تغيير
-        # --------------------------------------------------------------
-
         if not changed or old_text == new_text:
+
             print(
-                "✓ لا توجد فواصل عربية تحتاج إلى تغيير "
-                "خارج القوالب والاستشهادات."
+                "✓ لا توجد فواصل عربية تحتاج إلى تغيير."
             )
+
             return
 
-        # --------------------------------------------------------------
-        # عرض الفرق
-        # --------------------------------------------------------------
+        # ========================== عرض الفرق ==========================
 
         print(
             "\nسيتم تغيير الفواصل الموجودة في السياق العربي فقط."
@@ -610,48 +569,72 @@ def process_page(site, title):
             new_text
         )
 
-        # --------------------------------------------------------------
-        # تأكيد المستخدم
-        # --------------------------------------------------------------
+        # ========================== تأكيد المستخدم =====================
 
-        answer = input(
-            "\nحفظ التعديل؟ [y/N]: "
-        ).strip().lower()
+        while True:
 
-        if answer != "y":
+            try:
+
+                answer = input(
+                    "\nحفظ التعديل؟ [Y/N]: "
+                ).strip().lower()
+
+            except EOFError:
+
+                print(
+                    "\n⚠️ لم يتم توفير إدخال."
+                )
+
+                return
+
+            if answer in ("y", "yes"):
+
+                print(
+                    "✓ تم اختيار الحفظ."
+                )
+
+                break
+
+            if answer in ("n", "no", ""):
+
+                print(
+                    "✗ تم تجاهل التعديل."
+                )
+
+                return
+
             print(
-                "✗ تم تجاهل التعديل."
+                "⚠️ أدخل Y للحفظ أو N للتجاهل."
             )
-            return
 
-        # --------------------------------------------------------------
-        # إعادة قراءة الصفحة
-        # --------------------------------------------------------------
+        # ========================== إعادة القراءة ========================
 
         print(
             "\n🔄 إعادة قراءة الصفحة قبل الحفظ..."
         )
 
         try:
+
             latest_text = page.text
 
         except Exception as e:
+
             print(
                 f"تعذر التحقق من آخر نسخة: {e}"
             )
+
             return
 
-        # --------------------------------------------------------------
-        # منع الكتابة فوق تعديل جديد
-        # --------------------------------------------------------------
+        # ========================== منع التعارض =========================
 
         if latest_text != old_text:
+
             print(
-                "تغيرت الصفحة منذ القراءة الأولى."
+                "🛑 تغيرت الصفحة منذ القراءة الأولى."
             )
 
             print(
-                "🛑 لن يتم الحفظ لتجنب الكتابة فوق تعديلات جديدة."
+                "لن يتم الحفظ لتجنب الكتابة فوق تعديل جديد."
             )
 
             return
@@ -660,9 +643,7 @@ def process_page(site, title):
             "✓ الصفحة لم تتغير."
         )
 
-        # --------------------------------------------------------------
-        # إعادة فحص قوالب الاستبعاد
-        # --------------------------------------------------------------
+        # ========================== إعادة فحص الاستبعاد ================
 
         latest_wikicode = mwparserfromhell.parse(
             latest_text
@@ -674,6 +655,7 @@ def process_page(site, title):
         )
 
         if exclusion_reason:
+
             print(
                 "🔐 ظهرت حالة استبعاد قبل الحفظ:"
             )
@@ -692,84 +674,86 @@ def process_page(site, title):
             "✓ لا يوجد استبعاد جديد."
         )
 
-        # --------------------------------------------------------------
-        # وضع النص الجديد
-        # --------------------------------------------------------------
+        # ========================== الحفظ ===============================
 
         page.text = new_text
-
-        # --------------------------------------------------------------
-        # الحفظ
-        # --------------------------------------------------------------
 
         print(
             "\n💾 محاولة حفظ التعديل..."
         )
 
         try:
+
             page.save(
                 summary=EDIT_SUMMARY
             )
 
             print(
-                "✓ تم الحفظ بنجاح."
+                "✅ تم الحفظ بنجاح."
             )
 
         except pywikibot.exceptions.LockedPageError:
+
             print(
                 "🔒 الصفحة محمية، تم تجاهلها."
             )
 
         except pywikibot.exceptions.EditConflictError:
+
             print(
-                "حدث تعارض في التحرير، تم إلغاء الحفظ."
+                "⚠️ حدث تعارض في التحرير، تم إلغاء الحفظ."
             )
 
         except pywikibot.exceptions.SpamblacklistError:
+
             print(
-                "🚫 رفض ميدياويكي التعديل بسبب "
-                "قائمة الروابط المحظورة."
+                "🚫 رفض ميدياويكي التعديل بسبب قائمة الروابط المحظورة."
             )
 
         except pywikibot.exceptions.TitleblacklistError:
+
             print(
-                "🚫 رفض ميدياويكي التعديل بسبب "
-                "قائمة حظر العناوين."
+                "🚫 رفض ميدياويكي التعديل بسبب قائمة حظر العناوين."
             )
 
         except pywikibot.exceptions.AbuseFilterDisallowedError as e:
+
             print(
-                "🛑 منع مرشح إساءة الاستخدام "
-                f"هذا التعديل: {e}"
+                "🛑 منع مرشح إساءة الاستخدام هذا التعديل:"
             )
 
+            print(e)
+
         except pywikibot.exceptions.CaptchaError:
+
             print(
-                "🧩 طُلب حل اختبار كابتشا؛ "
-                "تعذر إتمام الحفظ آليًا."
+                "🧩 طُلب حل اختبار كابتشا."
             )
 
         except pywikibot.exceptions.PageInUseError:
+
             print(
-                "الصفحة مقفلة حاليًا بواسطة "
-                "عملية تحرير أخرى."
+                "🔒 الصفحة قيد التحرير حاليًا."
             )
 
         except pywikibot.exceptions.OtherPageSaveError as e:
+
             print(
-                "فشل الحفظ، وقد يكون السبب "
-                "قيدًا من {{bots}}/{{nobots}} أو غيره:"
+                "🚫 فشل الحفظ:"
             )
 
             print(e)
 
         except Exception as e:
+
             print(
-                "خطأ غير متوقع أثناء الحفظ: "
-                f"{e}"
+                "❌ خطأ غير متوقع أثناء الحفظ:"
             )
 
+            print(e)
+
         finally:
+
             print(
                 f"⏳ الانتظار {SLEEP_BETWEEN_EDITS} ثوانٍ..."
             )
@@ -779,29 +763,35 @@ def process_page(site, title):
             )
 
     except KeyboardInterrupt:
+
         raise
 
     except Exception as e:
+
         print(
             f"حدث خطأ أثناء معالجة «{title}»: {e}"
         )
 
 
-# ============================== التشغيل ======================================
+# ============================== التشغيل المستمر ==============================
 
 def main():
+
     site = pywikibot.Site(
         SITE_LANG,
         SITE_FAMILY
     )
 
     try:
+
         site.login()
 
     except Exception as e:
+
         print(
             f"تعذر تسجيل الدخول: {e}"
         )
+
         return
 
     print(
@@ -810,7 +800,7 @@ def main():
     )
 
     print(
-        "البحث المستمر عن مقالة عشوائية مناسبة"
+        "🤖 تشغيل البوت مع مراجعة Y/N"
     )
 
     print(
@@ -822,11 +812,7 @@ def main():
     )
 
     print(
-        "سيتم تجاهل النصوص الإنجليزية والقوالب والاستشهادات."
-    )
-
-    print(
-        "اضغط Ctrl+C لإيقاف البحث."
+        "اضغط Ctrl+C لإيقاف البوت."
     )
 
     print(
@@ -834,35 +820,62 @@ def main():
     )
 
     try:
-        title = get_random_article(
-            site
-        )
 
-        if not title:
-            print(
-                "تعذر العثور على مقالة مناسبة."
+        while True:
+
+            # البحث عن مقالة جديدة
+            title = get_random_article(
+                site
             )
-            return
 
-        process_page(
-            site,
-            title
-        )
+            if not title:
+
+                print(
+                    "تعذر العثور على مقالة مناسبة."
+                )
+
+                time.sleep(5)
+
+                continue
+
+            # معالجة المقالة
+            process_page(
+                site,
+                title
+            )
+
+            # بعد Y أو N يرجع هنا ويبحث عن مقالة جديدة
+            print(
+                "\n🔄 البحث عن مقالة عشوائية أخرى..."
+            )
+
+            time.sleep(2)
 
     except KeyboardInterrupt:
+
         print(
-            "\nتم إيقاف البوت بواسطة المستخدم."
+            "\n"
+            + "=" * 72
+        )
+
+        print(
+            "🛑 تم إيقاف البوت بواسطة المستخدم."
+        )
+
+        print(
+            "=" * 72
         )
 
     except Exception as e:
+
         print(
-            f"\nخطأ غير متوقع: {e}"
+            "\n❌ خطأ غير متوقع:"
         )
 
-    print(
-        "\n✓ انتهى التشغيل."
-    )
+        print(e)
 
+
+# ============================== بدء البرنامج ================================
 
 if __name__ == "__main__":
     main()
